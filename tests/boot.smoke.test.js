@@ -173,3 +173,74 @@ test('the tracker reports a friendly error instead of crashing when the camera i
   assert.equal(app._running, false);
   assert.match(app.ui.el.errorText.textContent, /camera/i);
 });
+
+/* --- regressions caught by the browser-free boot harness ------------- */
+
+test('capture re-renders before reading pixels back', async () => {
+  const { app } = await bootApp();
+  const before = app.sceneView.renderer.renderCalls;
+  app.capture();
+  assert.ok(
+    app.sceneView.renderer.renderCalls > before,
+    'capture() must render immediately before drawImage, or the WebGL buffer is already cleared and the snapshot has no 3D layer',
+  );
+  assert.match(app.ui.el.toast.textContent, /snapshot/i);
+  assert.equal(app.ui.el.errorText.textContent, '');
+});
+
+test('the primary hand does not jump to a bigger hand that wanders into frame', async () => {
+  const { app } = await bootApp();
+  const point = { index: BEND.straight, middle: BEND.curled, ring: BEND.curled, pinky: BEND.curled };
+  const scaleAboutWrist = (hand, k) => {
+    const w = hand.landmarks[0];
+    for (const p of hand.landmarks) {
+      p.x = w.x + (p.x - w.x) * k;
+      p.y = w.y + (p.y - w.y) * k;
+    }
+    return hand;
+  };
+  const small = makeHand({ bend: point, handedness: 'Right' });
+  const big = scaleAboutWrist(makeHand({ bend: point, handedness: 'Left' }), 1.6);
+
+  // Establish the right hand as primary.
+  let pick = app.selectHands([small]);
+  assert.equal(pick.primary, small);
+  for (let i = 0; i < 3; i++) pick = app.selectHands([small]);
+
+  // A larger hand appears. The cursor must not leap to it.
+  for (let i = 0; i < 10; i++) pick = app.selectHands([small, big]);
+  assert.equal(pick.primary, small, 'the established hand should stay primary');
+  assert.equal(pick.secondary, big, 'the newcomer becomes the secondary hand');
+
+  // When the established hand leaves, the other one takes over.
+  pick = app.selectHands([big]);
+  assert.equal(pick.primary, big);
+});
+
+test('the shape dropdown defaults to auto, so Create does not force a circle', async () => {
+  const { app } = await bootApp();
+  const sel = document.getElementById('shape-select');
+  assert.ok(sel, 'shape-select should be populated');
+  assert.equal(sel.value, '', 'the default selection must be the empty auto value');
+  assert.ok(sel.children.length > 1, 'the shape list should have been populated');
+
+  // Draw and commit a square stroke, then create with the default selection.
+  app.strokeManager.begin(400, 400, { tool: 'freehand', color: '#22d3ee', width: 6 });
+  for (let i = 0; i < 60; i++) {
+    const t = i / 60;
+    const per = t * 4;
+    const side = Math.floor(per) % 4;
+    const f = per - Math.floor(per);
+    const corners = [[400, 400], [700, 400], [700, 700], [400, 700]];
+    const a = corners[side];
+    const b = corners[(side + 1) % 4];
+    app.strokeManager.addPoint(a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f);
+  }
+  app.strokeManager.addPoint(400, 400);
+  app.strokeManager.end();
+
+  app.makeObjectFromLastStroke();
+  const objs = app.objectManager.all();
+  assert.equal(objs.length, 1);
+  assert.equal(objs[0].geometry, 'box', 'a square should become a cube, not a sphere');
+});

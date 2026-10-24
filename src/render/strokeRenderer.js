@@ -188,11 +188,17 @@ export class StrokeRenderer {
     ctx.closePath();
   }
 
-  /** Overlay: hand skeleton + fingertip cursor. */
-  drawHand(landmarks, mapper, viewport, { state, pinchStrength = 0, color = '#22d3ee' }) {
+  /**
+   * Overlay: hand skeleton + fingertip cursor.
+   *
+   * Deliberately uses the SAME mapping as the ink (toCanvasInRect, not
+   * toCanvas). Drawing the skeleton with the un-padded mapping put the glowing
+   * fingertip dot somewhere other than where strokes actually appeared.
+   */
+  drawHand(landmarks, mapper, rect, { pinchStrength = 0, color = '#22d3ee' } = {}) {
     if (!landmarks || landmarks.length < 21) return;
     const ctx = this.ctx;
-    const pt = (i) => mapper.toCanvas(landmarks[i]);
+    const pt = (i) => mapper.toCanvasInRect(landmarks[i], rect);
 
     const connections = [
       [0, 1], [1, 2], [2, 3], [3, 4],
@@ -227,7 +233,7 @@ export class StrokeRenderer {
     ctx.restore();
 
     // Glowing fingertip cursor.
-    const tip = mapper.toCanvas(landmarks[8]);
+    const tip = pt(8);
     ctx.save();
     ctx.shadowColor = color;
     ctx.shadowBlur = 24;

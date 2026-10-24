@@ -50,8 +50,13 @@ export class Effects {
     this.particles.frustumCulled = false;
     this.sceneView.add(this.particles);
 
-    // Hide all particles initially.
-    for (let i = 0; i < max; i++) this.pLife[i] = 0;
+    // Park every particle out of view. Zeroing the life alone would leave 500
+    // vertices sitting at the origin, which is wasteful at best and a visible
+    // clump at worst.
+    for (let i = 0; i < max; i++) {
+      this.pLife[i] = 0;
+      this.pPositions[i * 3 + 1] = -999;
+    }
     geo.setDrawRange(0, max);
   }
 
@@ -145,14 +150,17 @@ export class Effects {
   }
 
   /** Show the cursor at a world position. */
-  setCursor(pos, { visible = true, color = 0x22d3ee, pinch = 0 } = {}) {
+  setCursor(pos, { visible = true, color = '#22d3ee', pinch = 0 } = {}) {
     this.cursor.visible = visible;
     if (!visible) return;
     this.cursor.position.set(pos.x, pos.y, pos.z);
     const s = 1 - pinch * 0.35;
     this.cursorCore.scale.setScalar(s);
-    this.cursorCore.material.color.setHex(color);
-    this.cursorGlow.material.color.setHex(color);
+    // setStyle, NOT setHex. Callers pass CSS strings like '#22d3ee', and
+    // setHex bit-shifts its argument - on a string that yields NaN and the
+    // cursor renders pure black.
+    this.cursorCore.material.color.setStyle(color);
+    this.cursorGlow.material.color.setStyle(color);
     this.cursorGlow.material.opacity = 0.12 + pinch * 0.3;
   }
 

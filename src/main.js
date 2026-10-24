@@ -59,6 +59,8 @@ export class GestureVerse {
     this.palmPauseSeconds = 1.0;
     this._hadHand = false;
     this._fpsSamples = [];
+    this._pendingSide = null;
+    this._pendingFrames = 0;
   }
 
   async init() {
@@ -290,7 +292,9 @@ export class GestureVerse {
     }
 
     // --- physics + views ----------------------------------------------
-    const physEvents = this.objectManager.update(dt);
+    // Pausing freezes the world, including anything mid-flight. Events are
+    // still drained so the bookkeeping stays consistent.
+    const physEvents = this.objectManager.update(dt, { frozen: this.paused });
     for (const e of physEvents) {
       if (e.type === 'bounce') {
         const obj = this.objectManager.get(e.id);
@@ -310,11 +314,10 @@ export class GestureVerse {
     // on screen (the skeleton must follow it), a stroke is live, or the hand
     // just left (one final pass to clear the skeleton). An idle scene costs
     // nothing.
-    const needsOverlay = !!primary || this._hadHand || this.drawing;
+    const needsOverlay = !!primary || this._hadHand || !!this.strokeManager.active;
     this.strokeRenderer.render(this.strokeManager, this.strokeManager.active, needsOverlay);
     if (primary) {
-      this.strokeRenderer.drawHand(primary.landmarks, this.mapper, null, {
-        state: res.state,
+      this.strokeRenderer.drawHand(primary.landmarks, this.mapper, this.overlayRect(), {
         pinchStrength: res.pinchStrength,
         color: this._cursorColor(res.state),
       });
@@ -406,6 +409,10 @@ export class GestureVerse {
         if (this.drawing) this.finishStroke();
         const obj = this.objectManager.grab(worldPos);
         if (obj) {
+          // Restart the two-hand baseline for this object, otherwise scaling
+          // would jump straight to wherever the previous session left off.
+          this.twoHand.reset();
+          this._transforming = false;
           this.effects.spawnBurst(obj.position, obj.color, 26, 2.2);
           this.ui.toast('Grabbed — move your hand to carry it', 'good');
         }
@@ -539,7 +546,7 @@ export class GestureVerse {
     if (target) {
       const { object } = target;
       this.effects.spawnBurst(object.position, object.color, 20, 1.8);
-      this.objectViews.prune(new Set(this.objectManager.all().map((o) => o.id).filter((id) => id !== object.id)));
+      this.objectViews.removeView(object.id);
       this.objectManager.remove(object.id);
       this.ui.toast('Object removed');
       return;
@@ -572,17 +579,51 @@ export class GestureVerse {
   }
 
   selectHands(hands) {
-    if (!hands.length) return { primary: null, secondary: null };
+    if (!hands.length) {
+      this._pendingSide = null;
+      this._pendingFrames = 0;
+      return { primary: null, secondary: null };
+    }
+
     const pref = this.config.handedness;
     let candidates = hands;
     if (pref !== 'any') {
       const filtered = hands.filter((h) => (h.handedness || '').toLowerCase() === pref);
       if (filtered.length) candidates = filtered;
     }
-    const scored = candidates
-      .map((h) => ({ h, scale: handScale(h.landmarks) }))
-      .sort((a, b) => b.scale - a.scale);
-    const primary = scored[0].h;
+
+    const labelOf = (h) => (h.handedness || '').toLowerCase();
+    const largest = (list) =>
+      list.slice().sort((a, b) => handScale(b.landmarks) - handScale(a.landmarks))[0];
+
+    // Stickiness. MediaPipe exposes no stable hand id, so handedness is the
+    // only identity available. Keep the hand we already had while it is still
+    // in frame, and require several frames of agreement before switching -
+    // that absorbs the occasional handedness mislabel and stops the cursor
+    // leaping to the other hand the moment it appears.
+    let primary = this._primarySide
+      ? candidates.find((h) => labelOf(h) === this._primarySide)
+      : null;
+
+    if (primary) {
+      this._pendingSide = this._primarySide;
+      this._pendingFrames = 0;
+    } else {
+      const best = largest(candidates);
+      const side = labelOf(best);
+      if (side === this._pendingSide) this._pendingFrames += 1;
+      else {
+        this._pendingSide = side;
+        this._pendingFrames = 1;
+      }
+      primary = best;
+      if (!this._primarySide || this._pendingFrames >= 4) {
+        this._primarySide = side || null;
+        this._primarySince = performance.now();
+        this._pendingFrames = 0;
+      }
+    }
+
     const secondary = hands.find((h) => h !== primary) || null;
     return { primary, secondary };
   }
@@ -665,19 +706,31 @@ export class GestureVerse {
   /** Save a PNG of the current scene + ink. */
   capture() {
     try {
-      const scene = this.sceneView.renderer.domElement;
+      const { renderer, scene, camera } = this.sceneView;
+      const source = renderer.domElement;
       const out = document.createElement('canvas');
-      out.width = scene.width;
-      out.height = scene.height;
+      out.width = source.width;
+      out.height = source.height;
       const ctx = out.getContext('2d');
       ctx.fillStyle = '#05060f';
       ctx.fillRect(0, 0, out.width, out.height);
-      ctx.drawImage(scene, 0, 0, out.width, out.height);
+      // A WebGL drawing buffer is cleared after compositing unless
+      // preserveDrawingBuffer is set (which costs performance on every frame).
+      // Rendering again here, synchronously and immediately before drawImage,
+      // is the cheap way to guarantee there are real pixels to copy - without
+      // it the snapshot comes out with an empty 3D layer.
+      renderer.render(scene, camera);
+      ctx.drawImage(source, 0, 0, out.width, out.height);
       ctx.drawImage(this.strokeRenderer.canvas, 0, 0, out.width, out.height);
+
       const link = document.createElement('a');
       link.download = `gestureverse-${Date.now()}.png`;
       link.href = out.toDataURL('image/png');
+      link.rel = 'noopener';
+      // Firefox ignores a click on a detached anchor.
+      document.body.appendChild(link);
       link.click();
+      link.remove();
       this.ui.toast('Snapshot saved', 'good');
     } catch (err) {
       this.ui.showError(`Could not save the snapshot: ${err.message}`);

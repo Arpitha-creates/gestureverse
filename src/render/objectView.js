@@ -194,19 +194,28 @@ export class ObjectViewManager {
     shadow.material.opacity = Math.max(0.05, 0.3 - height * 0.02);
   }
 
+  /**
+   * Remove and dispose one object's meshes.
+   * @returns {boolean} whether a view existed
+   */
+  removeView(id) {
+    const view = this.views.get(id);
+    if (!view) return false;
+    this.sceneView.remove(view.mesh); // takes the outline child with it
+    this.sceneView.remove(view.shadow);
+    view.mesh.geometry.dispose(); // the outline shares this geometry
+    view.material.dispose();
+    view.shadow.geometry.dispose();
+    view.shadow.material.dispose();
+    view.outline.material.dispose();
+    this.views.delete(id);
+    return true;
+  }
+
   /** Remove meshes for objects that no longer exist. */
   prune(liveIds) {
-    for (const [id, view] of this.views) {
-      if (!liveIds.has(id)) {
-        this.sceneView.remove(view.mesh);
-        this.sceneView.remove(view.shadow);
-        view.mesh.geometry.dispose();
-        view.material.dispose();
-        view.shadow.geometry.dispose();
-        view.shadow.material.dispose();
-        view.outline.material.dispose();
-        this.views.delete(id);
-      }
+    for (const id of Array.from(this.views.keys())) {
+      if (!liveIds.has(id)) this.removeView(id);
     }
   }
 

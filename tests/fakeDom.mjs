@@ -34,27 +34,60 @@ class FakeClassList {
 class FakeContext {
   constructor() {
     this.canvas = null;
+    // Recorded so tests can assert on what was drawn and where.
+    this.calls = [];
+  }
+  _rec(name, args) {
+    this.calls.push({ name, args });
   }
   setTransform() {}
-  clearRect() {}
+  clearRect(...a) {
+    this._rec('clearRect', a);
+  }
   save() {}
   restore() {}
   beginPath() {}
-  moveTo() {}
-  lineTo() {}
-  arc() {}
+  moveTo(...a) {
+    this._rec('moveTo', a);
+  }
+  lineTo(...a) {
+    this._rec('lineTo', a);
+  }
+  arc(...a) {
+    this._rec('arc', a);
+  }
   arcTo() {}
-  rect() {}
-  ellipse() {}
+  rect(...a) {
+    this._rec('rect', a);
+  }
+  ellipse(...a) {
+    this._rec('ellipse', a);
+  }
   closePath() {}
   stroke() {}
   fill() {}
-  fillRect() {}
-  drawImage() {}
-  quadraticCurveTo() {}
+  fillRect(...a) {
+    this._rec('fillRect', a);
+  }
+  drawImage(...a) {
+    this._rec('drawImage', a);
+  }
+  quadraticCurveTo(...a) {
+    this._rec('quadraticCurveTo', a);
+  }
   fillText() {}
   measureText(text) {
     return { width: String(text).length * 7 };
+  }
+  /** The last recorded call of a given name, or null. */
+  last(name) {
+    for (let i = this.calls.length - 1; i >= 0; i--) {
+      if (this.calls[i].name === name) return this.calls[i];
+    }
+    return null;
+  }
+  countOf(name) {
+    return this.calls.filter((c) => c.name === name).length;
   }
 }
 
@@ -71,7 +104,10 @@ export class FakeElement {
     this.style = { setProperty() {}, removeProperty() {} };
     this.textContent = '';
     this.innerHTML = '';
-    this.value = '0';
+    // A real <select> reports its first option's value; our selects lead with
+    // the empty "auto" option. (The HTML itself is asserted separately in
+    // regression.test.js, which parses index.html directly.)
+    this.value = '';
     this.checked = true;
     this.disabled = false;
     this.clientWidth = 1280;
@@ -120,6 +156,16 @@ export class FakeElement {
   }
   requestFullscreen() {
     return Promise.resolve();
+  }
+  click() {
+    this.clicked = (this.clicked || 0) + 1;
+  }
+  remove() {
+    if (this.parentElement) this.parentElement.removeChild(this);
+    this.removed = true;
+  }
+  toDataURL() {
+    return 'data:image/png;base64,AAAA';
   }
 }
 

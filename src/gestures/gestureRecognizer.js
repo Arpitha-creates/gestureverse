@@ -241,7 +241,9 @@ export class GestureRecognizer {
         events.push({ type: EVENT.POINT_START, cursor: this._cursor() });
         break;
       case STATE.PINCH:
-        this.lastFire[STATE.PINCH] = t;
+        // No cooldown on pinch. Hysteresis plus the confirmation frames already
+        // prevent flicker, and a cooldown would silently swallow a quick
+        // grab-release-grab (the user's second pinch would be ignored).
         events.push({ type: EVENT.PINCH_START, cursor: this._cursor() });
         break;
       case STATE.PALM:

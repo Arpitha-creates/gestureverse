@@ -408,7 +408,7 @@ because the logic under test genuinely has no dependency on any of them. Synthet
 drive the real recognizer.
 
 ```bash
-npm test          # 94 tests
+npm test          # 110 tests
 npm run check     # parse every module + verify every import and DOM id
 ```
 
@@ -433,11 +433,34 @@ npm run check     # parse every module + verify every import and DOM id
 - **Performance and cache correctness** — that the stroke cache genuinely avoids work (60 strokes
   over 60 frames traces ~60 times, not 3600), and that it is invalidated by every mutation and by a
   resize. A cache that silently stops updating would be far worse than no cache.
+- **Regressions** — one test per bug listed below, each written so that it fails on the buggy code
+  rather than merely passing on the fixed code.
 
-> The end-to-end tests earned their keep. They caught three genuine bugs during development: a
-> thrown object being re-tagged as `hovered` in the same frame (which froze it mid-air), the
-> recognizer emitting `pinch_end` before `hand_lost` on a dropout (which threw objects that should
-> have been dropped), and the jump guard latching permanently after a large hand movement.
+### Bugs the tests caught
+
+All of these were real, and all were found by tests rather than by reading the code:
+
+| Bug | Symptom |
+|---|---|
+| A thrown object was re-tagged `hovered` in the same frame | Objects froze mid-air instead of flying |
+| The recognizer emitted `pinch_end` before `hand_lost` on a dropout | Tracking loss *threw* objects it should have dropped |
+| The jump guard latched after a large hand movement | One bad frame froze the cursor permanently |
+| Throws used instantaneous hand velocity | The hand stalls while the pinch release confirms, so most throws were lost |
+| `Color.setHex()` called with a CSS string | The 3D fingertip cursor rendered pure black |
+| The `rect` tool id never matched the `rectangle` shape key | A drawn rectangle became a sphere |
+| The shape dropdown defaulted to its first option | Manual **Create** silently forced a circle every time |
+| The hand skeleton used the un-padded mapping | The glowing cursor dot sat somewhere other than where strokes appeared |
+| `capture()` read the WebGL canvas after compositing | Snapshots came out with an empty 3D layer |
+| A resize did not reset the overlay's idle flag | The canvas went blank until something changed |
+| Pausing did not freeze physics | Thrown objects kept flying while paused |
+| Pinch carried a 350 ms cooldown | A quick grab-release-grab swallowed the second pinch |
+| A brief palm to end a stroke also paused the app | The app paused after every single stroke |
+| `selectHands` had no stickiness | The cursor leapt to a second hand the moment it entered frame |
+
+> One of those is worth calling out as a testing lesson. The colour bug was first asserted with a
+> "is the channel finite?" check, which **passed on the broken code** — `setHex('#22d3ee')` yields
+> black, not `NaN`, because `Math.floor('#22d3ee')` is `NaN` and `NaN >> 16` is `0`. The assertion
+> now checks the exact colour. A test that cannot fail is not a test.
 
 ---
 

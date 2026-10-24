@@ -106,10 +106,20 @@ export class HandTracker {
       );
     }
 
-    videoEl.srcObject = this.stream;
-    videoEl.setAttribute('playsinline', '');
-    videoEl.muted = true;
-    await videoEl.play();
+    try {
+      videoEl.srcObject = this.stream;
+      videoEl.setAttribute('playsinline', '');
+      videoEl.muted = true;
+      await videoEl.play();
+    } catch (err) {
+      // A raw play() rejection reads as gibberish; release the camera and say
+      // something a person can act on.
+      this.stop();
+      throw new TrackingError(
+        `The camera opened but the preview would not play (${err && err.name ? err.name : 'unknown error'}). Try reloading the page.`,
+        'no-camera',
+      );
+    }
 
     this.running = true;
     this._loop();

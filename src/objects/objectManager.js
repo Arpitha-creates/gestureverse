@@ -304,13 +304,21 @@ export class ObjectManager {
     return obj;
   }
 
-  /** Physics + housekeeping for all objects. Returns notable events. */
-  update(dt) {
+  /**
+   * Physics + housekeeping for all objects. Returns notable events.
+   * @param {number} dt seconds
+   * @param {{frozen?:boolean}} [opts] when frozen, nothing integrates but
+   *   queued events are still drained, so pausing freezes the world without
+   *   losing bookkeeping.
+   */
+  update(dt, { frozen = false } = {}) {
     const out = [];
-    for (const obj of this.objects.values()) {
-      if (obj.state === OBJ_STATE.FLYING) {
-        const evs = stepPhysics(obj, dt, this.config);
-        for (const e of evs) out.push({ type: e, id: obj.id });
+    if (!frozen) {
+      for (const obj of this.objects.values()) {
+        if (obj.state === OBJ_STATE.FLYING) {
+          const evs = stepPhysics(obj, dt, this.config);
+          for (const e of evs) out.push({ type: e, id: obj.id });
+        }
       }
     }
     out.push(...this.events);

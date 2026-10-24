@@ -38,12 +38,29 @@ const MAP = {
 };
 
 /**
- * @param {string} shape a SHAPE value
+ * Tool ids and shape ids are not always spelled the same - a rectangle is the
+ * `rect` tool but the `rectangle` shape. Normalise before the lookup, or a
+ * drawn rectangle silently becomes a sphere.
+ */
+const ALIASES = {
+  rect: SHAPE.RECTANGLE,
+  square: SHAPE.SQUARE,
+  circle: SHAPE.CIRCLE,
+  ellipse: SHAPE.ELLIPSE,
+  triangle: SHAPE.TRIANGLE,
+  star: SHAPE.STAR,
+  line: SHAPE.LINE,
+  freehand: SHAPE.CURVE,
+};
+
+/**
+ * @param {string} shape a SHAPE value, or a TOOL value from strokeManager
  * @param {string} [color]
  * @returns {{geometry:string, size:number, color:string}}
  */
 export function descriptorForShape(shape, color) {
-  const base = MAP[shape] || MAP[SHAPE.UNKNOWN];
+  const key = ALIASES[shape] || shape;
+  const base = MAP[key] || MAP[SHAPE.UNKNOWN];
   return { ...base, color };
 }
 
