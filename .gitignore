@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Optional local model cache (see TROUBLESHOOTING.md)
+assets/*.task
+
+# Build / editor noise
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+*.swp
+
+# Snapshots saved from the app
+gestureverse-*.png

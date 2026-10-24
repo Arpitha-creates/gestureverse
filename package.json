@@ -1,0 +1,24 @@
+{
+  "name": "gestureverse",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "GestureVerse - AI hand-gesture drawing and virtual object manipulation. Draw in the air, turn drawings into objects, then grab, lift, move, throw and place them with your hands.",
+  "scripts": {
+    "test": "node --import ./tests/register.mjs --test tests/",
+    "serve": "node scripts/serve.js",
+    "check": "node scripts/check-syntax.js && node scripts/check-links.js"
+  },
+  "keywords": [
+    "mediapipe",
+    "hand-tracking",
+    "three.js",
+    "gesture-recognition",
+    "computer-vision",
+    "webgl"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}
