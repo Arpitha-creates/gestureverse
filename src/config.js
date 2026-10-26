@@ -25,9 +25,10 @@ export const CONFIG = {
   },
 
   // One Euro filter settings: heavy smoothing when slow, almost none when fast.
-  // `cursor` smooths the drawing pen, `grab` keeps the pinch point snappy.
+  // `pen` smooths the drawing tip hardest - a shaky line is the worst failure
+  // mode this app has - while `grab` keeps the pinch point snappy.
   smoothing: {
-    cursor: { minCutoff: 1.6, beta: 0.035, dCutoff: 1.0 },
+    pen: { minCutoff: 2.6, beta: 0.1, dCutoff: 1.0 },
     grab: { minCutoff: 5.0, beta: 0.05, dCutoff: 1.0 },
   },
 
@@ -49,6 +50,9 @@ export const CONFIG = {
     pointConfirmFrames: 3,
     fistConfirmFrames: 4,
     palmConfirmFrames: 4,
+    // Frames of agreement before leaving a posture. Without this a single
+    // noisy frame ends the current stroke mid-line.
+    idleConfirmFrames: 5,
     // A fingertip jump larger than this (normalised units) in one frame is
     // treated as a tracking glitch rather than a movement.
     maxJump: 0.28,
@@ -77,11 +81,19 @@ export const CONFIG = {
   },
 
   draw: {
-    // World units. Below `minStep` the fingertip is treated as stationary, so a
-    // held finger does not build thousands of identical points.
-    minStep: 0.02,
-    minLength: 0.4,
+    // World units. Below `minStep` the fingertip counts as stationary, so a
+    // held hand does not scribble. ~5px on a 1000px-tall viewport, which is
+    // just above the residual noise the pen filter leaves behind.
+    minStep: 0.022,
+    // A stroke must span at least this much (bounding-box diagonal, world
+    // units) to count as a drawing. This is what stops a held hand scribbling.
+    minExtent: 0.35,
+    minLength: 0.3,
     maxPoints: 1200,
+    // Cleanup applied to a finished stroke: Laplacian passes, then simplification.
+    smoothPasses: 2,
+    smoothWeight: 0.25,
+    simplifyTolerance: 0.008,
     // Oldest drawings are recycled past this, to keep the GPU honest.
     maxDrawings: 60,
   },

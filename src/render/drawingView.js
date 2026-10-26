@@ -28,11 +28,12 @@ export class DrawingView {
     const pts = drawing.points;
 
     if (pts.length >= 2) {
+      // Centripetal parameterisation: the uniform variant overshoots between
+      // closely spaced points, which reads as the line wobbling.
       const curve = new THREE.CatmullRomCurve3(
         pts.map((p) => new THREE.Vector3(p.x, p.y, p.z || 0)),
         false,
-        'catmullrom',
-        0.5,
+        'centripetal',
       );
       const segments = Math.min(320, Math.max(12, pts.length * 2));
 

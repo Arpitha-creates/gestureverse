@@ -134,8 +134,9 @@ want:
 | `gesture.pinchMinReach` | `1.15` | Stops a closed fist registering as a pinch |
 | `gesture.deleteHoldMs` | `900` | How deliberate the delete gesture is |
 | `twoHand.exitGraceMs` | `300` | How long a two-hand grab survives a dropped hand |
-| `smoothing.cursor` | `minCutoff 1.6` | Lower = smoother but laggier lines |
-| `draw.minStep` | `0.02` | Jitter rejection, in world units |
+| `smoothing.pen` | `minCutoff 2.6` | Lower = smoother but laggier lines. Below ~2 the pen trails your hand and distorts the shape |
+| `draw.minStep` | `0.022` | Jitter rejection, in world units |
+| `draw.minExtent` | `0.35` | How far a stroke must span to count. Stops a still hand scribbling |
 | `draw.maxDrawings` | `60` | Oldest artwork is recycled past this |
 
 ---
@@ -143,7 +144,7 @@ want:
 ## Testing
 
 ```bash
-npm test          # 45 unit + integration tests, including a 4000-frame fuzz run
+npm test          # 50 unit + integration tests, including a 4000-frame fuzz run
 node scripts/check.js   # every import resolves; every DOM id exists
 ```
 
@@ -155,6 +156,9 @@ The suite covers the things that actually break a gesture app:
 - **No sticking.** Randomised 4000-frame fuzz asserts nothing stays grabbed without a
   pinch, and no position, scale or rotation ever goes `NaN`.
 - **No jump on grab.** A test asserts the object does not move on the frame it is grabbed.
+- **The pen keeps up, and the shape survives.** `stability.test.js` drives a noisy virtual
+  hand round a circle and asserts the pen lags under 30 px, the drawn circle stays within
+  3% of round, and a hand held still produces no drawing at all.
 
 ---
 

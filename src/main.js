@@ -39,7 +39,7 @@ class GestureVerse {
       result: { state: HandStateName.LOST, previous: HandStateName.LOST, changed: false, pose: null, holdMs: 0 },
       // Per-hand smoothing. The pen tip gets the gentler filter; the pinch
       // point gets a snappier one so grabbing never feels laggy.
-      tipFilter: new OneEuroPoint(CONFIG.smoothing.cursor),
+      tipFilter: new OneEuroPoint(CONFIG.smoothing.pen),
       pinchFilter: new OneEuroPoint(CONFIG.smoothing.grab),
     }));
 

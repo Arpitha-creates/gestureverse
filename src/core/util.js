@@ -176,6 +176,26 @@ export function simplifyRDP(points, tol) {
   return out;
 }
 
+/**
+ * Laplacian smoothing of an open polyline, endpoints pinned.
+ *
+ * Run over a committed stroke this removes the residual fingertip noise that
+ * survives the live filter, without shortening the line or rounding its ends.
+ */
+export function smoothPolyline(points, passes = 2, weight = 0.25) {
+  if (points.length < 3 || passes <= 0) return points.map((p) => ({ ...p }));
+  let pts = points.map((p) => ({ ...p }));
+  for (let pass = 0; pass < passes; pass++) {
+    const next = pts.map((p) => ({ ...p }));
+    for (let i = 1; i < pts.length - 1; i++) {
+      next[i].x = pts[i].x + weight * ((pts[i - 1].x + pts[i + 1].x) / 2 - pts[i].x);
+      next[i].y = pts[i].y + weight * ((pts[i - 1].y + pts[i + 1].y) / 2 - pts[i].y);
+    }
+    pts = next;
+  }
+  return pts;
+}
+
 /** Number of sharp direction changes around a closed polygon. */
 export function countCorners(pts, minTurnRadians = 0.62) {
   const n = pts.length;

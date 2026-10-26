@@ -5,6 +5,8 @@
  * resolution independent and survives a window resize or camera change.
  */
 
+import { smoothPolyline, simplifyRDP } from '../core/util.js';
+
 export class StrokeBuilder {
   constructor(config) {
     this.config = config;
@@ -49,8 +51,33 @@ export class StrokeBuilder {
     for (let i = 1; i < pts.length; i++) {
       length += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
     }
-    if (length < this.config.draw.minLength) return null;
-    return { points: pts, color: this.color, width: this.width, length };
+
+    // Judge the stroke by how far it actually spans, not by how far the pen
+    // travelled. A hand held still under noise accumulates plenty of path
+    // length while covering no ground - that is a blob, not a drawing.
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const p of pts) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+    const extent = Math.hypot(maxX - minX, maxY - minY);
+    if (extent < this.config.draw.minExtent) return null;
+
+    // Clean up before this becomes artwork. The live filter cannot remove every
+    // last wobble without making the pen feel laggy, so the committed stroke is
+    // smoothed and simplified here instead. This is what makes a drawn shape
+    // hold its shape.
+    const draw = this.config.draw;
+    let clean = smoothPolyline(pts, draw.smoothPasses, draw.smoothWeight);
+    clean = simplifyRDP(clean, draw.simplifyTolerance);
+    if (clean.length < 2) clean = pts;
+
+    return { points: clean, color: this.color, width: this.width, length };
   }
 
   cancel() {

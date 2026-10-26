@@ -47,6 +47,13 @@ second hand keeps leaving the frame at the edges, move back from the camera or r
 Press `U`, or hold an open palm for 1.5 s. Deletion requires a fist held for 0.9 s with a
 visible red ring, so this should be rare — if it is not, raise `gesture.deleteHoldMs`.
 
+## Holding my hand still draws a blob
+
+It should not - a stroke has to span `draw.minExtent` (0.35 world units, roughly 40 px)
+before it is kept, so jitter around a stationary fingertip is discarded. If you are
+seeing blobs, your `minStep` has probably been lowered below the noise floor; put it back
+near `0.022`.
+
 ## It is slow / the frame rate drops
 
 - MediaPipe falls back to the CPU delegate automatically when the GPU one is unavailable.
@@ -56,14 +63,16 @@ visible red ring, so this should be rare — if it is not, raise `gesture.delete
 
 ## Lines look shaky
 
-Raise the smoothing in `src/config.js`:
+This is a trade-off you tune, not a bug: smoothing is lag. In `src/config.js`:
 
 ```js
-smoothing: { cursor: { minCutoff: 1.0, beta: 0.02, dCutoff: 1.0 } }
+smoothing: { pen: { minCutoff: 2.6, beta: 0.1, dCutoff: 1.0 } }
 ```
 
-Lower `minCutoff` means smoother but slightly laggier. `beta` controls how much fast
-movement is allowed through unfiltered.
+`minCutoff` is the dial. Lower is smoother but the pen trails your hand; below about 2
+the lag is bad enough to distort the shape you are drawing. Higher follows more closely
+but lets more jitter through. `beta` controls how much fast movement bypasses the filter.
+`draw.smoothPasses` additionally cleans the committed stroke without adding any lag.
 
 ## The scene is empty after reload
 

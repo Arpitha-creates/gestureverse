@@ -41,6 +41,8 @@ export class HandState {
     if (raw === POINT) return g.pointConfirmFrames;
     if (raw === FIST) return g.fistConfirmFrames;
     if (raw === PALM) return g.palmConfirmFrames;
+    // Leaving a posture needs agreement too, or one bad frame ends a stroke.
+    if (raw === IDLE) return g.idleConfirmFrames;
     return 1;
   }
 
