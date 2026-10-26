@@ -1,9 +1,14 @@
 /**
- * The scene graph's data layer: what drawings exist and where they are.
+ * The scene graph's data layer: what objects exist and where they are.
+ *
+ * Two kinds of object share this model, so grabbing, moving, resizing,
+ * rotating, deleting and undo all work identically for both:
+ *
+ *   kind 'stroke' - artwork the user drew, kept as its own path
+ *   kind 'shape'  - an exact primitive (cube, sphere, cone...) placed by hand
  *
  * Deliberately free of Three.js. Rendering subscribes to this list; gestures
- * mutate it. Keeping the two apart is what makes undo/redo and hit-testing
- * simple.
+ * mutate it.
  */
 
 import { centroid } from '../core/util.js';
@@ -13,26 +18,34 @@ let sequence = 0;
 export class Drawing {
   constructor({
     id = null,
+    kind = 'stroke',
+    primitive = null,
     points = [],
     color = '#38f0ff',
     width = 0.02,
     position = { x: 0, y: 0, z: 0 },
     rotation = { x: 0, y: 0, z: 0 },
     scale = 1,
+    size = 1,
     createdAt = 0,
   } = {}) {
     this.id = id || `d${++sequence}`;
-    // Points are stored relative to the drawing's own origin so a single group
-    // transform (position / rotation / scale) moves the whole artwork.
+    this.kind = kind;
+    this.primitive = primitive;
+    // Points are stored relative to the object's own origin so a single group
+    // transform (position / rotation / scale) moves the whole thing.
     this.points = points.map((p) => ({ x: p.x, y: p.y, z: p.z || 0 }));
     this.color = color;
     this.width = width;
     this.position = { ...position };
     this.rotation = { ...rotation };
     this.scale = scale;
+    this.size = size;
     this.createdAt = createdAt;
     this.selected = false;
-    this.radius = this.points.reduce((max, p) => Math.max(max, Math.hypot(p.x, p.y)), 0.01);
+    this.radius = this.kind === 'shape'
+      ? Math.max(0.01, size)
+      : this.points.reduce((max, p) => Math.max(max, Math.hypot(p.x, p.y)), 0.01);
   }
 
   /** Build a drawing from a finished stroke, centred on its own centroid. */
@@ -40,6 +53,7 @@ export class Drawing {
     const c = centroid(stroke.points);
     const local = stroke.points.map((p) => ({ x: p.x - c.x, y: p.y - c.y, z: p.z || 0 }));
     return new Drawing({
+      kind: 'stroke',
       points: local,
       color: stroke.color,
       width: stroke.width,
@@ -48,21 +62,41 @@ export class Drawing {
     });
   }
 
+  /** Build an exact primitive at a point. */
+  static fromShape({ primitive, size, position, color, createdAt }) {
+    return new Drawing({
+      kind: 'shape',
+      primitive,
+      size,
+      color,
+      position: { ...position },
+      createdAt,
+    });
+  }
+
+  get isShape() {
+    return this.kind === 'shape';
+  }
+
   toJSON() {
     return {
       id: this.id,
+      kind: this.kind,
+      primitive: this.primitive,
       points: this.points,
       color: this.color,
       width: this.width,
       position: { ...this.position },
       rotation: { ...this.rotation },
       scale: this.scale,
+      size: this.size,
       createdAt: this.createdAt,
     };
   }
 
   static fromJSON(obj) {
-    return new Drawing(obj);
+    // Snapshots written before shapes existed have no kind; default them.
+    return new Drawing({ kind: 'stroke', ...obj });
   }
 }
 
@@ -70,8 +104,7 @@ export class Drawing {
  * Undo/redo over whole-scene snapshots.
  *
  * Snapshots are cheap (a few thousand small objects) and they make every action
- * - draw, grab, move, resize, delete - undoable for free, which a command log
- * would not without far more code.
+ * - draw, place, grab, move, resize, delete - undoable for free.
  */
 export class History {
   constructor(limit = 60) {

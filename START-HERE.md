@@ -43,6 +43,14 @@ Click **Enable camera & begin** and allow the camera when the browser asks.
 6. Release to leave it floating.
 7. Pinch with **both** hands, then move them apart — it resizes. Twist them — it rotates.
 
+## Want exact shapes instead of freehand?
+
+Click **Shapes** in the top bar. The left panel becomes a palette of exact primitives —
+cube, sphere, cone, cylinder, pyramid, torus, star, diamond. Pick one, point where you
+want it, and pinch to drop it. A translucent preview follows your hand the whole time, so
+you see exactly what you will get. Once placed it behaves like any drawing: grab it,
+move it, resize it with two hands, or delete it with a fist.
+
 ## If something feels wrong
 
 Everything is tunable in `src/config.js`, and `TROUBLESHOOTING.md` covers the usual

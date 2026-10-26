@@ -98,6 +98,13 @@ export const CONFIG = {
     maxDrawings: 60,
   },
 
+  // Exact primitives placed in Shapes mode.
+  shapes: {
+    // Bounding radius in world units at placement time. Two-hand resize works
+    // on these exactly as it does on drawings.
+    size: 0.85,
+  },
+
   colors: ['#38f0ff', '#ff3df0', '#a6ff3d', '#ffd93d', '#ff6b3d', '#ffffff'],
 };
 

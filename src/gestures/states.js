@@ -19,4 +19,5 @@ export const AppStateName = Object.freeze({
   RESIZE: 'resize',
   ROTATE: 'rotate',
   DELETE: 'delete',
+  PLACE: 'place',
 });

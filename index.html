@@ -32,6 +32,7 @@
       </div>
       <nav class="modes" aria-label="Interaction mode">
         <button data-mode="draw" class="mode active">Draw</button>
+        <button data-mode="shape" class="mode">Shapes</button>
         <button data-mode="play" class="mode">Play</button>
       </nav>
       <div class="pills">
@@ -46,7 +47,12 @@
         <h2>Colour</h2>
         <div id="palette" class="palette" role="group" aria-label="Drawing colour"></div>
       </section>
-      <section>
+      <section id="shapes-section" class="is-hidden">
+        <h2>Shape</h2>
+        <div id="shapes" class="shapes" role="group" aria-label="3D shape"></div>
+        <p class="hint">Point to position it, pinch to place it.</p>
+      </section>
+      <section id="brush-section">
         <h2>Brush</h2>
         <div id="brushes" class="brushes" role="group" aria-label="Brush size"></div>
       </section>
@@ -88,6 +94,7 @@
           <tr><td>Hold one hand, fist the other</td><td>Delete the held drawing</td></tr>
           <tr><td>Fist over a drawing</td><td>Delete it after a short hold</td></tr>
           <tr><td>Hold an open palm</td><td>Undo the last action</td></tr>
+          <tr><td>Shapes mode + pinch</td><td>Place an exact 3D shape where you pinch</td></tr>
         </tbody>
       </table>
       <p class="keys">Keys: <b>U</b> undo · <b>R</b> redo · <b>C</b> clear · <b>E</b> eraser · <b>G</b> guide · <b>Esc</b> release · <b>1</b>/<b>2</b> mode</p>

@@ -19,6 +19,7 @@ import { SceneView } from './render/scene.js';
 import { DrawingView } from './render/drawingView.js';
 import { Overlay } from './render/overlay.js';
 import { UI } from './ui/ui.js';
+import { SHAPES } from './objects/shapes.js';
 
 class GestureVerse {
   constructor() {
@@ -45,6 +46,7 @@ class GestureVerse {
 
     this.tracking = false;
     this.mode = 'draw';
+    this.stamp = SHAPES[0].id;
     this.brush = { color: CONFIG.colors[0], width: 0.019 };
     this.eraser = false;
     this.fps = 60;
@@ -60,6 +62,9 @@ class GestureVerse {
       },
       onBrush: (brush) => {
         this.brush = { ...brush };
+      },
+      onShape: (id) => {
+        this.stamp = id;
       },
       onEraser: (on) => {
         this.eraser = on;
@@ -138,6 +143,7 @@ class GestureVerse {
     if (this.tracking) this.stepHands(now, dt);
 
     this.view.sync(this.world);
+    this.updateGhost();
     this.scene.render();
     this.overlay.draw(this.buildFrame());
 
@@ -153,6 +159,25 @@ class GestureVerse {
       });
     }
   };
+
+  /**
+   * In Shapes mode a translucent preview of the chosen primitive follows the
+   * hand, so what gets placed is never a surprise.
+   */
+  updateGhost() {
+    const show = this.mode === 'shape' && this.stamp && !this.interaction.carried;
+    if (!show) {
+      this.view.setGhost(null);
+      return;
+    }
+    const hand = this.slots.find((s) => s.pose && s.result.state !== HandStateName.LOST);
+    if (!hand) {
+      this.view.setGhost(null);
+      return;
+    }
+    const p = this.scene.toWorld(hand.pose.pinch, 0);
+    this.view.setGhost(this.stamp, this.brush.color, p);
+  }
 
   stepHands(now, dt) {
     const raw = this.tracker.detect(now);
@@ -180,6 +205,7 @@ class GestureVerse {
       mode: this.mode,
       brush: this.brush,
       eraser: this.eraser,
+      stamp: this.stamp,
       toWorld: (point, depth) => this.scene.toWorld(point, depth),
       project: (v) => this.scene.project(v),
       viewport: { width: this.scene.width, height: this.scene.height },

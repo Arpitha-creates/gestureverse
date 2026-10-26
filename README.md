@@ -22,7 +22,11 @@ video frame ever leaves your machine.
   rotate. The HUD tells you which one you are doing.
 - **Delete.** Hold a fist over a drawing, or hold it with one hand and fist the other.
   A red ring fills for 0.9 s first, so nothing dies from one bad frame.
-- **Undo anything.** Every draw, move, resize and delete is undoable.
+- **Place exact 3D shapes.** Switch to **Shapes**, pick a cube, sphere, cone, cylinder,
+  pyramid, torus, star or diamond, and pinch to drop it where you point. A translucent
+  preview follows your hand so what lands is never a surprise — no guessing at what you
+  drew. Placed shapes grab, move, resize, rotate and delete exactly like drawings.
+- **Undo anything.** Every draw, place, move, resize and delete is undoable.
 
 ---
 
@@ -62,9 +66,10 @@ Then open <http://localhost:5173>, allow the camera, and raise your index finger
 | Fist held over a drawing | Delete it (after a 0.9 s charge) |
 | Hold with one hand, fist the other | Delete the held drawing |
 | Open palm held 1.5 s | Undo the last action |
+| **Shapes** mode, then pinch | Place the selected exact 3D shape where you pinch |
 
 Keyboard: `U` undo · `R` redo · `C` clear · `E` eraser · `G` guide · `Esc` release
-everything · `1`/`2` switch mode.
+everything · `1`/`2`/`3` switch between Draw, Shapes and Play.
 
 A printable one-pager lives in [GESTURES.md](GESTURES.md).
 
@@ -89,7 +94,8 @@ webcam ─▶ HandTracker ─▶ analyzeHand ─▶ HandState ─▶ Interaction
 | `src/gestures/handState.js` | One state machine per hand: hysteresis + temporal confirmation |
 | `src/gestures/interaction.js` | The brain. Draw / grab / carry / resize / rotate / delete |
 | `src/drawing/strokeBuilder.js` | Collects a stroke, rejects jitter and twitches |
-| `src/objects/world.js` | Drawings, selection, undo/redo snapshots |
+| `src/objects/world.js` | Objects (strokes and shapes), selection, undo/redo snapshots |
+| `src/objects/shapes.js` | The catalogue of exact primitives |
 | `src/render/scene.js` | Camera, lights, floor, and the two coordinate conversions |
 | `src/render/drawingView.js` | Drawings → neon tubes, with proper disposal |
 | `src/render/overlay.js` | Skeleton, cursor, live stroke, progress rings |
@@ -137,7 +143,8 @@ want:
 | `smoothing.pen` | `minCutoff 2.6` | Lower = smoother but laggier lines. Below ~2 the pen trails your hand and distorts the shape |
 | `draw.minStep` | `0.022` | Jitter rejection, in world units |
 | `draw.minExtent` | `0.35` | How far a stroke must span to count. Stops a still hand scribbling |
-| `draw.maxDrawings` | `60` | Oldest artwork is recycled past this |
+| `draw.maxDrawings` | `60` | Oldest object is recycled past this |
+| `shapes.size` | `0.85` | Default size of a placed primitive, in world units |
 
 ---
 

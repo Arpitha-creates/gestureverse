@@ -30,6 +30,7 @@ The same guide is available in-app via the **Guide** button or the **G** key.
 | 10 | **Fist held over a drawing** | Delete it, after a 0.9 s red charge ring |
 | 11 | Hold with one hand, **fist the other** | Delete the held drawing |
 | 12 | **Open palm held 1.5 s** | Undo the last action |
+| 13 | **Shapes** mode + pinch | Place the selected exact 3D shape where you pinch |
 
 ---
 
@@ -43,7 +44,7 @@ The same guide is available in-app via the **Guide** button or the **G** key.
 | `E` | Toggle eraser |
 | `G` | Gesture guide |
 | `Esc` | Release everything immediately |
-| `1` / `2` | Draw / Play mode |
+| `1` / `2` / `3` | Draw / Shapes / Play mode |
 
 ---
 

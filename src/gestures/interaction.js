@@ -20,7 +20,7 @@ import { StrokeBuilder } from '../drawing/strokeBuilder.js';
 import { Drawing } from '../objects/world.js';
 import { clamp, clamp01, shortestAngle } from '../core/util.js';
 
-const { IDLE, DRAW, HOVER, GRAB, MOVE, TWO_HAND, RESIZE, ROTATE, DELETE } = AppStateName;
+const { IDLE, DRAW, HOVER, GRAB, MOVE, TWO_HAND, RESIZE, ROTATE, DELETE, PLACE } = AppStateName;
 const { PINCH, POINT, FIST, LOST } = HandStateName;
 
 const POSITION_LIMITS = { x: 9, y: 6, z: 3.5 };
@@ -139,6 +139,11 @@ export class Interaction {
       state = this.beginTwoHand(ctx, pinching);
     } else if (pinching.length === 1) {
       state = this.beginCarry(ctx, pinching[0]);
+      // In Shapes mode a pinch over empty space stamps the chosen primitive
+      // instead of doing nothing. Pinching an existing object still grabs it.
+      if (state === HOVER && ctx.mode === 'shape' && ctx.stamp) {
+        state = this.placeShape(ctx, pinching[0]);
+      }
     } else {
       state = this.stepIdle(ctx, pointing, fisting);
     }
@@ -170,6 +175,30 @@ export class Interaction {
     this.depth0 = hand.pose.depth;
     this.z0 = target.position.z;
     return GRAB;
+  }
+
+  /**
+   * Stamp an exact primitive at the pinch point.
+   *
+   * The next frame will pick it up as a normal grab (the cursor is already on
+   * it), so placing and then adjusting position is one continuous motion.
+   */
+  placeShape(ctx, hand) {
+    if (!ctx.stamp) return IDLE;
+    const p = ctx.toWorld(hand.pose.pinch, 0);
+    this.world.mark();
+    const shape = Drawing.fromShape({
+      primitive: ctx.stamp,
+      size: this.config.shapes.size,
+      position: this.clampPosition({ x: p.x, y: p.y, z: 0 }),
+      color: ctx.brush.color,
+      createdAt: ctx.now,
+    });
+    this.world.add(shape);
+    const cap = this.config.draw.maxDrawings;
+    while (this.world.count > cap) this.world.removeById(this.world.drawings[0].id);
+    this.hover = null;
+    return PLACE;
   }
 
   stepCarry(ctx, pinching, fisting) {

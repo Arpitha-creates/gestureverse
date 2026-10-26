@@ -3,6 +3,7 @@
  */
 
 import { AppStateName } from '../gestures/states.js';
+import { SHAPES } from '../objects/shapes.js';
 
 const STATE_LABEL = {
   [AppStateName.IDLE]: 'Idle',
@@ -14,6 +15,7 @@ const STATE_LABEL = {
   [AppStateName.RESIZE]: 'Resizing',
   [AppStateName.ROTATE]: 'Rotating',
   [AppStateName.DELETE]: 'Delete',
+  [AppStateName.PLACE]: 'Placing',
 };
 
 const BRUSHES = [
@@ -28,6 +30,7 @@ export class UI {
     this.handlers = handlers;
     this.brush = { color: config.colors[0], width: BRUSHES[1].width };
     this.mode = 'draw';
+    this.stamp = SHAPES[0].id;
     this.eraser = false;
     this.toastTimer = null;
 
@@ -37,6 +40,9 @@ export class UI {
       startError: document.getElementById('start-error'),
       palette: document.getElementById('palette'),
       brushes: document.getElementById('brushes'),
+      shapes: document.getElementById('shapes'),
+      shapesSection: document.getElementById('shapes-section'),
+      brushSection: document.getElementById('brush-section'),
       modes: Array.from(document.querySelectorAll('[data-mode]')),
       stateBadge: document.getElementById('state-badge'),
       pillTracking: document.getElementById('pill-tracking'),
@@ -56,7 +62,9 @@ export class UI {
 
     this.buildPalette();
     this.buildBrushes();
+    this.buildShapes();
     this.bind();
+    this.applyModeSections();
   }
 
   buildPalette() {
@@ -92,6 +100,32 @@ export class UI {
       });
       this.el.brushes.appendChild(btn);
     }
+  }
+
+  buildShapes() {
+    this.el.shapes.innerHTML = '';
+    for (const shape of SHAPES) {
+      const btn = document.createElement('button');
+      btn.className = 'shape-btn';
+      btn.textContent = shape.label;
+      btn.dataset.shape = shape.id;
+      if (shape.id === this.stamp) btn.classList.add('active');
+      btn.addEventListener('click', () => {
+        this.stamp = shape.id;
+        for (const b of this.el.shapes.children) b.classList.remove('active');
+        btn.classList.add('active');
+        this.handlers.onShape?.(shape.id);
+        this.toast(`${shape.label} selected — point to place it, pinch to drop it`);
+      });
+      this.el.shapes.appendChild(btn);
+    }
+  }
+
+  /** Shapes mode swaps the brush controls for the primitive palette. */
+  applyModeSections() {
+    const shapeMode = this.mode === 'shape';
+    if (this.el.shapesSection) this.el.shapesSection.classList.toggle('is-hidden', !shapeMode);
+    if (this.el.brushSection) this.el.brushSection.classList.toggle('is-hidden', shapeMode);
   }
 
   bind() {
@@ -141,6 +175,9 @@ export class UI {
           this.setMode('draw');
           break;
         case '2':
+          this.setMode('shape');
+          break;
+        case '3':
           this.setMode('play');
           break;
         default:
@@ -152,8 +189,11 @@ export class UI {
   setMode(mode) {
     this.mode = mode;
     for (const btn of this.el.modes) btn.classList.toggle('active', btn.dataset.mode === mode);
+    this.applyModeSections();
     this.handlers.onMode?.(mode);
-    this.toast(mode === 'draw' ? 'Draw mode — point to draw' : 'Play mode — point to select, pinch to grab');
+    if (mode === 'draw') this.toast('Draw mode — point to draw');
+    else if (mode === 'shape') this.toast('Shapes mode — pick a shape, pinch to place it');
+    else this.toast('Play mode — point to select, pinch to grab');
   }
 
   toggleGuide(force) {
