@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#05060f" />
-  <title>GestureVerse — Draw in the air, then grab it</title>
-  <meta name="description" content="Draw shapes in the air with your fingertip, turn them into 3D objects, then grab, lift, move, throw and place them with your hands. MediaPipe + Three.js." />
+  <title>GestureVerse — Draw it, lift it, move it</title>
+  <meta name="description" content="Draw in the air with your index finger, lift your drawing off the canvas with a pinch, and move, resize and rotate it in 3D with your hands. MediaPipe + Three.js, running entirely in your browser." />
   <link rel="stylesheet" href="./styles.css" />
   <script type="importmap">
     {
@@ -16,38 +16,32 @@
     }
   </script>
 </head>
-<body class="mirror">
+<body>
   <div id="app">
-    <!-- Background layers ------------------------------------------------ -->
     <video id="camera" autoplay playsinline muted></video>
     <canvas id="scene"></canvas>
     <canvas id="overlay"></canvas>
 
-    <!-- Top bar ---------------------------------------------------------- -->
-    <header class="topbar glass">
+    <header id="topbar" class="glass">
       <div class="brand">
-        <span class="brand-mark"></span>
-        <div>
+        <span class="brand-dot"></span>
+        <div class="brand-text">
           <h1>GestureVerse</h1>
-          <p>Draw it · grab it · throw it</p>
+          <p>draw · lift · move · play</p>
         </div>
       </div>
-
       <nav class="modes" aria-label="Interaction mode">
-        <button data-mode="draw" class="mode active">Air Drawing</button>
-        <button data-mode="play" class="mode">Object Playground</button>
-        <button data-mode="creative" class="mode">Creative Playground</button>
+        <button data-mode="draw" class="mode active">Draw</button>
+        <button data-mode="play" class="mode">Play</button>
       </nav>
-
-      <div class="hud">
-        <span id="hud-tracking" class="pill bad">Waiting to start</span>
-        <span id="hud-fps" class="pill">0 FPS</span>
-        <span id="hud-hand" class="pill">—</span>
+      <div class="pills">
+        <span id="pill-tracking" class="pill bad">Paused</span>
+        <span id="pill-hands" class="pill bad">0 hands</span>
+        <span id="pill-fps" class="pill">60 fps</span>
       </div>
     </header>
 
-    <!-- Left panel: drawing tools --------------------------------------- -->
-    <aside id="left-panel" class="panel glass">
+    <aside id="toolbar" class="glass">
       <section>
         <h2>Colour</h2>
         <div id="palette" class="palette" role="group" aria-label="Drawing colour"></div>
@@ -58,119 +52,57 @@
       </section>
       <section>
         <h2>Tool</h2>
-        <div id="tools" class="tools" role="group" aria-label="Drawing tool"></div>
-      </section>
-      <section>
-        <h2>Make object</h2>
-        <div class="row">
-          <select id="shape-select" aria-label="Shape to create">
-            <option value="">Auto (as detected)</option>
-          </select>
-          <button id="btn-make" class="btn small">Create</button>
-        </div>
-        <p class="hint">Draw a closed shape, then pinch it or press Space.</p>
+        <button id="btn-eraser" class="tool">Eraser</button>
       </section>
     </aside>
 
-    <!-- Right panel: state + settings ----------------------------------- -->
-    <aside id="right-panel" class="panel glass right">
-      <section>
-        <h2>Now</h2>
-        <dl class="status">
-          <dt>Mode</dt><dd id="hud-mode">Air Drawing</dd>
-          <dt>Gesture</dt><dd id="hud-gesture">—</dd>
-          <dt>Object</dt><dd id="hud-object">None selected</dd>
-        </dl>
-      </section>
-      <section>
-        <h2>Sensitivity</h2>
-        <div class="row">
-          <input id="sensitivity" type="range" min="-3" max="3" step="1" value="0" aria-label="Tracking sensitivity" />
-          <span id="sensitivity-label" class="mono">0</span>
-        </div>
-        <div class="presets">
-          <button data-preset="relaxed" class="btn small">Relaxed</button>
-          <button data-preset="balanced" class="btn small active">Balanced</button>
-          <button data-preset="responsive" class="btn small">Responsive</button>
-        </div>
-      </section>
-      <section>
-        <h2>Options</h2>
-        <label class="check"><input id="camera-toggle" type="checkbox" checked /> Show camera preview</label>
-        <label class="check"><input id="throw-toggle" type="checkbox" checked /> Allow throwing</label>
-        <label class="check">
-          Primary hand
-          <select id="hand-pref">
-            <option value="any">Either</option>
-            <option value="right">Right</option>
-            <option value="left">Left</option>
-          </select>
-        </label>
-      </section>
-    </aside>
+    <div id="actions" class="glass" role="group" aria-label="Actions">
+      <button id="btn-undo">Undo</button>
+      <button id="btn-redo">Redo</button>
+      <button id="btn-clear">Clear</button>
+      <button id="btn-reset">Reset view</button>
+      <button id="btn-guide">Guide</button>
+      <button id="btn-tracking" class="tool">Tracking off</button>
+    </div>
 
-    <!-- Bottom bar: actions --------------------------------------------- -->
-    <footer class="bottombar glass">
-      <button id="btn-undo" class="btn" disabled>Undo</button>
-      <button id="btn-redo" class="btn" disabled>Redo</button>
-      <button id="btn-clear" class="btn">Clear canvas</button>
-      <button id="btn-save" class="btn">Save snapshot</button>
-      <button id="btn-reset" class="btn danger">Reset all</button>
-      <button id="btn-fullscreen" class="btn">Full screen</button>
-      <button id="guide-toggle" class="btn">Gesture guide</button>
-      <button id="panel-toggle" class="btn">Hide panels</button>
-    </footer>
+    <div id="state-badge" data-state="idle">Idle</div>
 
-    <!-- Gesture guide --------------------------------------------------- -->
-    <div id="guide" class="guide glass" aria-hidden="true">
-      <h2>Gesture guide</h2>
+    <div id="toast" role="status" aria-live="polite"></div>
+
+    <section id="guide" class="glass" aria-label="Gesture guide">
+      <header>
+        <h2>Gesture guide</h2>
+        <button id="guide-close" aria-label="Close guide">×</button>
+      </header>
       <table>
         <tbody>
-          <tr><td>Index finger up, others curled</td><td>Move the cursor</td></tr>
-          <tr><td>Point while in Air Drawing</td><td>Draw a stroke</td></tr>
-          <tr><td>Thumb + index pinch</td><td>Grab / hold an object</td></tr>
-          <tr><td>Pinch and move</td><td>Lift and carry</td></tr>
-          <tr><td>Release the pinch</td><td>Place (or throw if fast)</td></tr>
-          <tr><td>Two hands apart / together</td><td>Scale the held object</td></tr>
-          <tr><td>Twist two hands</td><td>Rotate the held object</td></tr>
-          <tr><td>Open palm</td><td>End stroke · hold 1s to pause</td></tr>
-          <tr><td>Closed fist</td><td>Erase what the cursor is over</td></tr>
-          <tr><td>Fast move, then release</td><td>Throw the object</td></tr>
+          <tr><td>Index finger up</td><td>Move the cursor</td></tr>
+          <tr><td>Point (Draw mode)</td><td>Draw a line</td></tr>
+          <tr><td>Open your hand</td><td>Finish the stroke</td></tr>
+          <tr><td>Thumb + index pinch</td><td>Grab a drawing</td></tr>
+          <tr><td>Pinch and move</td><td>Carry it anywhere, including in depth</td></tr>
+          <tr><td>Release the pinch</td><td>Leave it floating there</td></tr>
+          <tr><td>Pinch with both hands</td><td>Grab with two hands</td></tr>
+          <tr><td>Hands apart / together</td><td>Resize the drawing</td></tr>
+          <tr><td>Twist both hands</td><td>Rotate the drawing</td></tr>
+          <tr><td>Hold one hand, fist the other</td><td>Delete the held drawing</td></tr>
+          <tr><td>Fist over a drawing</td><td>Delete it after a short hold</td></tr>
+          <tr><td>Hold an open palm</td><td>Undo the last action</td></tr>
         </tbody>
       </table>
-      <p class="hint">Shortcuts: <b>Space</b> make object · <b>G</b> guide · <b>H</b> panels · <b>Esc</b> clear</p>
-    </div>
+      <p class="keys">Keys: <b>U</b> undo · <b>R</b> redo · <b>C</b> clear · <b>E</b> eraser · <b>G</b> guide · <b>Esc</b> release · <b>1</b>/<b>2</b> mode</p>
+    </section>
 
-    <!-- Feedback --------------------------------------------------------- -->
-    <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
-    <div id="error-banner" class="error-banner" role="alert">
-      <span class="error-icon">!</span>
-      <span id="error-text"></span>
-      <button id="btn-retry" class="btn small">Retry</button>
-    </div>
-
-    <!-- Onboarding / calibration ---------------------------------------- -->
-    <div id="onboarding" class="onboarding">
-      <div class="card glass">
-        <span class="brand-mark large"></span>
-        <h1>GestureVerse</h1>
-        <p class="lede">Draw in the air. Turn it into an object. Grab it, lift it, throw it.</p>
-
-        <ol class="steps">
-          <li><b>Allow the camera.</b> Nothing leaves your device — tracking runs locally in your browser.</li>
-          <li><b>Position your hand.</b> Hold it about an arm's length away, palm facing the camera, whole hand in frame.</li>
-          <li><b>Wait for the cursor.</b> A glowing dot follows your index fingertip.</li>
-          <li><b>Draw a circle.</b> Point with your index finger, then pinch to grab what you made.</li>
-        </ol>
-
-        <div class="onboard-actions">
-          <button id="btn-start" class="btn primary large">Start camera</button>
-          <button id="btn-skip" class="btn small">Skip</button>
-        </div>
-        <p class="hint">Works best in Chrome or Edge on a laptop with decent light.</p>
+    <section id="start-screen">
+      <div class="start-card glass">
+        <span class="start-badge">MediaPipe · Three.js · no install</span>
+        <h2>Draw in the air.<br />Then pick it up.</h2>
+        <p>Your index finger is the pen. Close a drawing, pinch it, and lift it off the canvas into a floating 3D workspace you can move, resize and rotate with your hands.</p>
+        <button id="btn-start">Enable camera &amp; begin</button>
+        <p id="start-error" class="error"></p>
+        <p class="fineprint">Your camera feed is processed locally in this browser. No frames are uploaded, stored or sent anywhere.</p>
       </div>
-    </div>
+    </section>
   </div>
 
   <script type="module" src="./src/main.js"></script>
