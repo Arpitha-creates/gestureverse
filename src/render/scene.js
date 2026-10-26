@@ -1,174 +1,118 @@
 /**
- * GestureVerse - Three.js world.
+ * Thin Three.js wrapper: camera, lights, floor, and the two coordinate
+ * conversions the rest of the app depends on.
  *
- * Owns the renderer, scene, camera, lighting, floor grid and the render loop.
- * Everything else (objects, effects) attaches to `scene` through this module.
+ * The conversions are done by unprojection rather than trigonometry, so they
+ * stay exact no matter how the camera is angled or how the window is resized.
  */
 
 import * as THREE from 'three';
 
 export class SceneView {
-  constructor(config, canvas) {
-    this.config = config;
+  constructor(canvas) {
     this.canvas = canvas;
-
-    // Antialiasing costs real fragment time, and on a high-DPI display the
-    // extra device pixels already hide the jaggies.
-    const dpr = window.devicePixelRatio || 1;
     this.renderer = new THREE.WebGLRenderer({
       canvas,
-      antialias: dpr <= 1.5,
+      antialias: true,
       alpha: true,
       powerPreference: 'high-performance',
-      stencil: false,
     });
-    this.renderer.setPixelRatio(
-      Math.min(window.devicePixelRatio || 1, config.performance.pixelRatioCap),
-    );
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.1;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.toneMapping = THREE.NoToneMapping;
 
     this.scene = new THREE.Scene();
-    this.scene.background = null; // the CSS gradient behind shows through
-    this.scene.fog = new THREE.FogExp2(0x05060f, 0.035);
+    this.scene.fog = new THREE.FogExp2(0x05060f, 0.028);
 
-    const w = config.world;
-    this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
-    this.camera.position.set(0, 0.6, 9);
-    this.camera.lookAt(0, 0, 0);
+    this.camera = new THREE.PerspectiveCamera(52, 1, 0.1, 200);
+    this.camera.position.set(0, 1.3, 9.2);
+    this.camera.lookAt(0, -0.25, 0);
 
-    this._buildLights();
-    this._buildFloor();
+    this.addLights();
+    this.addFloor();
 
-    this._clock = new THREE.Clock();
-    this._updaters = [];
-    this._running = false;
-    this._rafId = null;
-    this.onFrame = null;
+    this._v = new THREE.Vector3();
+    this._dir = new THREE.Vector3();
+    this.width = 1;
+    this.height = 1;
     this.resize();
   }
 
-  _buildLights() {
-    const ambient = new THREE.AmbientLight(0x6b7cff, 0.55);
-    this.scene.add(ambient);
+  addLights() {
+    this.scene.add(new THREE.AmbientLight(0x8899ff, 0.55));
 
-    const key = new THREE.DirectionalLight(0xffffff, 1.5);
-    key.position.set(4, 8, 6);
-    key.castShadow = true;
-    key.shadow.mapSize.set(1024, 1024);
-    key.shadow.camera.near = 1;
-    key.shadow.camera.far = 30;
-    key.shadow.camera.left = -8;
-    key.shadow.camera.right = 8;
-    key.shadow.camera.top = 8;
-    key.shadow.camera.bottom = -8;
+    const key = new THREE.DirectionalLight(0xffffff, 1.4);
+    key.position.set(3, 6, 7);
     this.scene.add(key);
-    this.keyLight = key;
 
-    const rim = new THREE.DirectionalLight(0x22d3ee, 0.9);
-    rim.position.set(-6, 3, -5);
-    this.scene.add(rim);
+    const rimCyan = new THREE.PointLight(0x38f0ff, 60, 40, 2);
+    rimCyan.position.set(-6, 3, 4);
+    this.scene.add(rimCyan);
 
-    const fill = new THREE.PointLight(0xe879f9, 0.7, 30);
-    fill.position.set(-4, -2, 4);
-    this.scene.add(fill);
+    const rimMagenta = new THREE.PointLight(0xff3df0, 55, 40, 2);
+    rimMagenta.position.set(6, -2, 3);
+    this.scene.add(rimMagenta);
   }
 
-  _buildFloor() {
-    const w = this.config.world;
-
-    // A soft reflective floor plane that catches shadows.
-    const floorGeo = new THREE.PlaneGeometry(w.width * 2.2, w.depth * 2.2);
-    const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x0a0f22,
-      roughness: 0.75,
-      metalness: 0.25,
-      transparent: true,
-      opacity: 0.92,
-    });
-    const floor = new THREE.Mesh(floorGeo, floorMat);
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.y = w.floorY;
-    floor.receiveShadow = true;
-    this.scene.add(floor);
-    this.floor = floor;
-
-    const grid = new THREE.GridHelper(w.width * 1.6, 24, 0x22d3ee, 0x1e2a52);
-    grid.position.y = w.floorY + 0.005;
+  addFloor() {
+    const grid = new THREE.GridHelper(40, 40, 0x1d3a5c, 0x101c2e);
+    grid.position.y = -3.2;
     grid.material.transparent = true;
-    grid.material.opacity = 0.35;
+    grid.material.opacity = 0.55;
     this.scene.add(grid);
     this.grid = grid;
 
-    // Faint back wall glow so the volume reads as a room.
-    const wallGeo = new THREE.PlaneGeometry(w.width * 1.6, w.height * 1.6);
-    const wallMat = new THREE.MeshBasicMaterial({
-      color: 0x0b1030,
-      transparent: true,
-      opacity: 0.35,
-      side: THREE.DoubleSide,
-    });
-    const wall = new THREE.Mesh(wallGeo, wallMat);
-    wall.position.set(0, 0, -w.depth / 2 - 1.2);
-    this.scene.add(wall);
-  }
-
-  /** Register a per-frame updater: fn(dt, elapsed). */
-  addUpdater(fn) {
-    this._updaters.push(fn);
-    return fn;
-  }
-
-  removeUpdater(fn) {
-    const i = this._updaters.indexOf(fn);
-    if (i !== -1) this._updaters.splice(i, 1);
+    const horizon = new THREE.Mesh(
+      new THREE.PlaneGeometry(60, 60),
+      new THREE.MeshBasicMaterial({ color: 0x070b16, transparent: true, opacity: 0.85 }),
+    );
+    horizon.rotation.x = -Math.PI / 2;
+    horizon.position.y = -3.21;
+    this.scene.add(horizon);
   }
 
   resize() {
-    const parent = this.canvas.parentElement || document.body;
-    const width = parent.clientWidth || window.innerWidth;
-    const height = parent.clientHeight || window.innerHeight;
-    this.renderer.setSize(width, height, false);
-    this.camera.aspect = width / Math.max(height, 1);
+    const rect = this.canvas.getBoundingClientRect();
+    const w = Math.max(1, Math.round(rect.width));
+    const h = Math.max(1, Math.round(rect.height));
+    this.width = w;
+    this.height = h;
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    this.width = width;
-    this.height = height;
   }
 
-  start() {
-    if (this._running) return;
-    this._running = true;
-    this._clock.start();
-    const loop = () => {
-      if (!this._running) return;
-      this._rafId = requestAnimationFrame(loop);
-      const dt = Math.min(this._clock.getDelta(), 0.05); // clamp after tab switches
-      const elapsed = this._clock.elapsedTime;
-      for (const fn of this._updaters) fn(dt, elapsed);
-      if (this.onFrame) this.onFrame(dt, elapsed);
-      this.renderer.render(this.scene, this.camera);
+  /**
+   * Normalised screen point (0..1, already mirrored) to a world position on the
+   * plane z = depth.
+   */
+  toWorld(point, depth = 0) {
+    this._v.set(point.x * 2 - 1, -(point.y * 2 - 1), 0.5);
+    this._v.unproject(this.camera);
+    this._dir.copy(this._v).sub(this.camera.position).normalize();
+    const denom = this._dir.z;
+    if (Math.abs(denom) < 1e-6) return { x: 0, y: 0, z: depth };
+    const t = (depth - this.camera.position.z) / denom;
+    return {
+      x: this.camera.position.x + this._dir.x * t,
+      y: this.camera.position.y + this._dir.y * t,
+      z: depth,
     };
-    loop();
   }
 
-  stop() {
-    this._running = false;
-    if (this._rafId !== null) cancelAnimationFrame(this._rafId);
-    this._rafId = null;
+  /** World position to canvas pixels. */
+  project(pos) {
+    this._v.set(pos.x, pos.y, pos.z || 0).project(this.camera);
+    return {
+      x: (this._v.x * 0.5 + 0.5) * this.width,
+      y: (-this._v.y * 0.5 + 0.5) * this.height,
+    };
   }
 
-  add(object) {
-    this.scene.add(object);
-  }
-
-  remove(object) {
-    this.scene.remove(object);
+  render() {
+    this.renderer.render(this.scene, this.camera);
   }
 
   dispose() {
-    this.stop();
     this.renderer.dispose();
   }
 }

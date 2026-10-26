@@ -1,255 +1,201 @@
 /**
- * GestureVerse - DOM UI.
- *
- * Owns every element outside the two canvases: mode switcher, drawing tools,
- * object panel, HUD, onboarding, calibration and error surfaces. It holds no
- * application state - it renders what main.js hands it and forwards user
- * intent back through callbacks.
+ * All DOM wiring lives here so nothing else in the app touches the document.
  */
 
+import { AppStateName } from '../gestures/states.js';
+
+const STATE_LABEL = {
+  [AppStateName.IDLE]: 'Idle',
+  [AppStateName.DRAW]: 'Drawing',
+  [AppStateName.HOVER]: 'Hovering',
+  [AppStateName.GRAB]: 'Grabbing',
+  [AppStateName.MOVE]: 'Moving',
+  [AppStateName.TWO_HAND]: 'Two-hand',
+  [AppStateName.RESIZE]: 'Resizing',
+  [AppStateName.ROTATE]: 'Rotating',
+  [AppStateName.DELETE]: 'Delete',
+};
+
+const BRUSHES = [
+  { label: 'Thin', width: 0.011 },
+  { label: 'Medium', width: 0.019 },
+  { label: 'Bold', width: 0.032 },
+];
+
 export class UI {
-  constructor(config) {
+  constructor(config, handlers) {
     this.config = config;
-    this.callbacks = {};
+    this.handlers = handlers;
+    this.brush = { color: config.colors[0], width: BRUSHES[1].width };
+    this.mode = 'draw';
+    this.eraser = false;
+    this.toastTimer = null;
+
     this.el = {
-      app: document.getElementById('app'),
-      video: document.getElementById('camera'),
-      scene: document.getElementById('scene'),
-      overlay: document.getElementById('overlay'),
-      hudMode: document.getElementById('hud-mode'),
-      hudTracking: document.getElementById('hud-tracking'),
-      hudFps: document.getElementById('hud-fps'),
-      hudGesture: document.getElementById('hud-gesture'),
-      hudObject: document.getElementById('hud-object'),
-      hudHand: document.getElementById('hud-hand'),
+      start: document.getElementById('start-screen'),
+      startBtn: document.getElementById('btn-start'),
+      startError: document.getElementById('start-error'),
       palette: document.getElementById('palette'),
       brushes: document.getElementById('brushes'),
-      tools: document.getElementById('tools'),
-      modeButtons: Array.from(document.querySelectorAll('[data-mode]')),
-      toast: document.getElementById('toast'),
-      error: document.getElementById('error-banner'),
-      errorText: document.getElementById('error-text'),
-      onboarding: document.getElementById('onboarding'),
+      modes: Array.from(document.querySelectorAll('[data-mode]')),
+      stateBadge: document.getElementById('state-badge'),
+      pillTracking: document.getElementById('pill-tracking'),
+      pillHands: document.getElementById('pill-hands'),
+      pillFps: document.getElementById('pill-fps'),
+      btnUndo: document.getElementById('btn-undo'),
+      btnRedo: document.getElementById('btn-redo'),
+      btnClear: document.getElementById('btn-clear'),
+      btnReset: document.getElementById('btn-reset'),
+      btnGuide: document.getElementById('btn-guide'),
+      btnEraser: document.getElementById('btn-eraser'),
+      btnTracking: document.getElementById('btn-tracking'),
       guide: document.getElementById('guide'),
-      guideToggle: document.getElementById('guide-toggle'),
-      sensitivity: document.getElementById('sensitivity'),
-      sensitivityLabel: document.getElementById('sensitivity-label'),
-      throwToggle: document.getElementById('throw-toggle'),
-      cameraToggle: document.getElementById('camera-toggle'),
-      handPref: document.getElementById('hand-pref'),
-      undo: document.getElementById('btn-undo'),
-      redo: document.getElementById('btn-redo'),
-      clear: document.getElementById('btn-clear'),
-      save: document.getElementById('btn-save'),
-      reset: document.getElementById('btn-reset'),
-      fullscreen: document.getElementById('btn-fullscreen'),
-      panelToggle: document.getElementById('panel-toggle'),
-      leftPanel: document.getElementById('left-panel'),
-      rightPanel: document.getElementById('right-panel'),
-      presetButtons: Array.from(document.querySelectorAll('[data-preset]')),
+      guideClose: document.getElementById('guide-close'),
+      toast: document.getElementById('toast'),
     };
-    this._buildPalette();
-    this._buildBrushes();
-    this._buildTools();
-    this._wire();
-    this._toastTimer = null;
+
+    this.buildPalette();
+    this.buildBrushes();
+    this.bind();
   }
 
-  on(name, fn) {
-    this.callbacks[name] = fn;
-  }
-
-  _fire(name, ...args) {
-    if (this.callbacks[name]) this.callbacks[name](...args);
-  }
-
-  _buildPalette() {
-    const { palette, defaultColor } = this.config.drawing;
+  buildPalette() {
     this.el.palette.innerHTML = '';
-    palette.forEach((color, i) => {
-      const b = document.createElement('button');
-      b.className = 'swatch';
-      b.style.setProperty('--c', color);
-      b.title = color;
-      b.setAttribute('aria-label', `Colour ${color}`);
-      if (i === 0) b.classList.add('active');
-      b.addEventListener('click', () => {
-        this.el.palette.querySelectorAll('.swatch').forEach((s) => s.classList.remove('active'));
-        b.classList.add('active');
-        this._fire('color', color);
+    for (const color of this.config.colors) {
+      const btn = document.createElement('button');
+      btn.className = 'swatch';
+      btn.style.setProperty('--swatch', color);
+      btn.setAttribute('aria-label', `Colour ${color}`);
+      if (color === this.brush.color) btn.classList.add('active');
+      btn.addEventListener('click', () => {
+        this.brush.color = color;
+        for (const s of this.el.palette.children) s.classList.remove('active');
+        btn.classList.add('active');
+        this.handlers.onBrush?.({ ...this.brush });
       });
-      this.el.palette.appendChild(b);
-    });
-    this.selectedColor = defaultColor;
+      this.el.palette.appendChild(btn);
+    }
   }
 
-  _buildBrushes() {
-    const { brushSizes, defaultWidth } = this.config.drawing;
+  buildBrushes() {
     this.el.brushes.innerHTML = '';
-    brushSizes.forEach((size) => {
-      const b = document.createElement('button');
-      b.className = 'brush';
-      b.title = `${size}px`;
-      b.setAttribute('aria-label', `Brush ${size} pixels`);
-      const dot = document.createElement('span');
-      dot.style.width = `${Math.min(size, 18)}px`;
-      dot.style.height = `${Math.min(size, 18)}px`;
-      b.appendChild(dot);
-      if (size === defaultWidth) b.classList.add('active');
-      b.addEventListener('click', () => {
-        this.el.brushes.querySelectorAll('.brush').forEach((x) => x.classList.remove('active'));
-        b.classList.add('active');
-        this._fire('brush', size);
+    for (const b of BRUSHES) {
+      const btn = document.createElement('button');
+      btn.className = 'brush';
+      btn.textContent = b.label;
+      if (b.width === this.brush.width) btn.classList.add('active');
+      btn.addEventListener('click', () => {
+        this.brush.width = b.width;
+        for (const s of this.el.brushes.children) s.classList.remove('active');
+        btn.classList.add('active');
+        this.handlers.onBrush?.({ ...this.brush });
       });
-      this.el.brushes.appendChild(b);
-    });
-    this.selectedWidth = defaultWidth;
+      this.el.brushes.appendChild(btn);
+    }
   }
 
-  _buildTools() {
-    const tools = [
-      ['freehand', 'Freehand'],
-      ['line', 'Line'],
-      ['rect', 'Rectangle'],
-      ['square', 'Square'],
-      ['circle', 'Circle'],
-      ['ellipse', 'Ellipse'],
-      ['triangle', 'Triangle'],
-      ['star', 'Star'],
-    ];
-    this.el.tools.innerHTML = '';
-    tools.forEach(([id, label], i) => {
-      const b = document.createElement('button');
-      b.className = 'tool';
-      b.dataset.tool = id;
-      b.textContent = label;
-      if (i === 0) b.classList.add('active');
-      b.addEventListener('click', () => {
-        this.el.tools.querySelectorAll('.tool').forEach((x) => x.classList.remove('active'));
-        b.classList.add('active');
-        this._fire('tool', id);
-      });
-      this.el.tools.appendChild(b);
-    });
-    this.selectedTool = 'freehand';
-  }
+  bind() {
+    this.el.startBtn.addEventListener('click', () => this.handlers.onStart?.());
 
-  _wire() {
-    this.el.modeButtons.forEach((b) =>
-      b.addEventListener('click', () => this._fire('mode', b.dataset.mode)),
-    );
-    this.el.undo.addEventListener('click', () => this._fire('undo'));
-    this.el.redo.addEventListener('click', () => this._fire('redo'));
-    this.el.clear.addEventListener('click', () => this._fire('clear'));
-    this.el.save.addEventListener('click', () => this._fire('save'));
-    this.el.reset.addEventListener('click', () => this._fire('reset'));
-    this.el.fullscreen.addEventListener('click', () => this._fire('fullscreen'));
-    this.el.guideToggle.addEventListener('click', () => this.toggleGuide());
-    this.el.panelToggle.addEventListener('click', () => this.togglePanels());
-    this.el.cameraToggle.addEventListener('change', () => this._fire('camera', this.el.cameraToggle.checked));
-    this.el.throwToggle.addEventListener('change', () => this._fire('throw', this.el.throwToggle.checked));
-    this.el.handPref.addEventListener('change', () => this._fire('hand', this.el.handPref.value));
-    this.el.sensitivity.addEventListener('input', () => {
-      const v = Number(this.el.sensitivity.value);
-      this.el.sensitivityLabel.textContent = `${v > 0 ? '+' : ''}${v}`;
-      this._fire('sensitivity', v);
+    for (const btn of this.el.modes) {
+      btn.addEventListener('click', () => this.setMode(btn.dataset.mode));
+    }
+
+    this.el.btnEraser.addEventListener('click', () => {
+      this.eraser = !this.eraser;
+      this.el.btnEraser.classList.toggle('active', this.eraser);
+      this.handlers.onEraser?.(this.eraser);
+      this.toast(this.eraser ? 'Eraser on — point at a drawing to remove it' : 'Eraser off');
     });
-    this.el.presetButtons.forEach((b) =>
-      b.addEventListener('click', () => {
-        this.el.presetButtons.forEach((x) => x.classList.remove('active'));
-        b.classList.add('active');
-        this._fire('preset', b.dataset.preset);
-      }),
-    );
-    const startBtn = document.getElementById('btn-start');
-    if (startBtn) startBtn.addEventListener('click', () => this._fire('start'));
-    const skipBtn = document.getElementById('btn-skip');
-    if (skipBtn) skipBtn.addEventListener('click', () => this._fire('start'));
-    const retryBtn = document.getElementById('btn-retry');
-    if (retryBtn) retryBtn.addEventListener('click', () => this._fire('retry'));
+
+    this.el.btnUndo.addEventListener('click', () => this.handlers.onUndo?.());
+    this.el.btnRedo.addEventListener('click', () => this.handlers.onRedo?.());
+    this.el.btnClear.addEventListener('click', () => this.handlers.onClear?.());
+    this.el.btnReset.addEventListener('click', () => this.handlers.onResetView?.());
+    this.el.btnGuide.addEventListener('click', () => this.toggleGuide());
+    this.el.guideClose.addEventListener('click', () => this.toggleGuide(false));
+    this.el.btnTracking.addEventListener('click', () => this.handlers.onToggleTracking?.());
+
+    window.addEventListener('keydown', (e) => {
+      if (e.target && /input|textarea/i.test(e.target.tagName)) return;
+      switch (e.key.toLowerCase()) {
+        case 'escape':
+          this.handlers.onEscape?.();
+          break;
+        case 'u':
+          this.handlers.onUndo?.();
+          break;
+        case 'r':
+          this.handlers.onRedo?.();
+          break;
+        case 'c':
+          this.handlers.onClear?.();
+          break;
+        case 'g':
+          this.toggleGuide();
+          break;
+        case 'e':
+          this.el.btnEraser.click();
+          break;
+        case '1':
+          this.setMode('draw');
+          break;
+        case '2':
+          this.setMode('play');
+          break;
+        default:
+          break;
+      }
+    });
   }
 
   setMode(mode) {
-    this.el.modeButtons.forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
-    this.el.hudMode.textContent = { draw: 'Air Drawing', play: 'Object Playground', creative: 'Creative Playground' }[mode] || mode;
-    document.body.dataset.mode = mode;
-  }
-
-  setHand(h) {
-    this.el.hudHand.textContent = h || '—';
-  }
-
-  setTracking(text, ok) {
-    this.el.hudTracking.textContent = text;
-    this.el.hudTracking.classList.toggle('ok', !!ok);
-    this.el.hudTracking.classList.toggle('bad', !ok);
-  }
-
-  setFps(fps) {
-    this.el.hudFps.textContent = `${fps} FPS`;
-  }
-
-  setGesture(name) {
-    this.el.hudGesture.textContent = name || '—';
-  }
-
-  setObject(info) {
-    this.el.hudObject.textContent = info || 'None selected';
-  }
-
-  setHistory(canUndo, canRedo) {
-    this.el.undo.disabled = !canUndo;
-    this.el.redo.disabled = !canRedo;
-  }
-
-  toast(message, kind = 'info') {
-    const t = this.el.toast;
-    t.textContent = message;
-    t.className = `toast show ${kind}`;
-    clearTimeout(this._toastTimer);
-    this._toastTimer = setTimeout(() => {
-      t.className = 'toast';
-    }, 2200);
-  }
-
-  showError(message) {
-    this.el.errorText.textContent = message;
-    this.el.error.classList.add('show');
-  }
-
-  hideError() {
-    this.el.error.classList.remove('show');
-  }
-
-  showOnboarding() {
-    this.el.onboarding.classList.add('show');
-  }
-
-  hideOnboarding() {
-    this.el.onboarding.classList.remove('show');
+    this.mode = mode;
+    for (const btn of this.el.modes) btn.classList.toggle('active', btn.dataset.mode === mode);
+    this.handlers.onMode?.(mode);
+    this.toast(mode === 'draw' ? 'Draw mode — point to draw' : 'Play mode — point to select, pinch to grab');
   }
 
   toggleGuide(force) {
-    const show = force === undefined ? !this.el.guide.classList.contains('show') : force;
-    this.el.guide.classList.toggle('show', show);
+    const show = force === undefined ? !this.el.guide.classList.contains('open') : force;
+    this.el.guide.classList.toggle('open', show);
   }
 
-  togglePanels(force) {
-    const hide = force === undefined ? !document.body.classList.contains('panels-hidden') : force;
-    document.body.classList.toggle('panels-hidden', hide);
+  toast(message) {
+    const el = this.el.toast;
+    el.textContent = message;
+    el.classList.add('show');
+    clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
   }
 
-  setCameraVisible(visible) {
-    this.el.video.style.opacity = visible ? '0.34' : '0';
-    this.el.cameraToggle.checked = visible;
+  hideStart() {
+    this.el.start.classList.add('hidden');
   }
 
-  setThrowEnabled(on) {
-    this.el.throwToggle.checked = on;
+  showStartError(message) {
+    this.el.startError.textContent = message;
+    this.el.startError.classList.add('show');
+    this.el.startBtn.disabled = false;
+    this.el.startBtn.textContent = 'Try again';
   }
 
-  setSensitivityLabel(v) {
-    this.el.sensitivity.value = String(v);
-    this.el.sensitivityLabel.textContent = `${v > 0 ? '+' : ''}${v}`;
+  setTracking(on) {
+    this.el.btnTracking.classList.toggle('active', on);
+    this.el.btnTracking.textContent = on ? 'Tracking on' : 'Tracking off';
+    this.el.pillTracking.textContent = on ? 'Tracking' : 'Paused';
+    this.el.pillTracking.classList.toggle('good', on);
+    this.el.pillTracking.classList.toggle('bad', !on);
+  }
+
+  update({ appState, handCount, fps, canUndo, canRedo }) {
+    this.el.stateBadge.textContent = STATE_LABEL[appState] || 'Idle';
+    this.el.stateBadge.dataset.state = appState;
+    this.el.pillHands.textContent = `${handCount} hand${handCount === 1 ? '' : 's'}`;
+    this.el.pillHands.classList.toggle('good', handCount > 0);
+    this.el.pillHands.classList.toggle('bad', handCount === 0);
+    this.el.pillFps.textContent = `${Math.round(fps)} fps`;
+    this.el.btnUndo.disabled = !canUndo;
+    this.el.btnRedo.disabled = !canRedo;
   }
 }
